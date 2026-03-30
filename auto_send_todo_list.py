@@ -7,6 +7,7 @@ Gmailからメールを検索し、ToDoリストを作成して自動送信
 import os
 import pickle
 import re
+import json
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from google.auth.transport.requests import Request
@@ -18,6 +19,10 @@ from email.mime.text import MIMEText
 import html
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send']
+
+# 設定ファイルを読み込む
+with open('config.json', 'r', encoding='utf-8') as f:
+    CONFIG = json.load(f)
 
 def authenticate():
     """OAuth 2.0 認証"""
@@ -143,7 +148,8 @@ def extract_tasks_from_emails(emails):
             'sender': email['sender'],
             'received_date': email['received_date'],
             'has_deadline': has_deadline,
-            'due_date': due_date
+            'due_date': due_date,
+            'body': body
         })
 
     return tasks
@@ -195,10 +201,18 @@ def create_todo_html(confirm_tasks, remind_tasks):
         html_content += '<h2 class="confirm-header">⚠️ 【要確認】締切がある案件</h2>'
         for task in confirm_tasks:
             due_str = task['due_date'].strftime('%Y年%m月%d日') if task['due_date'] else '日付未記載'
+            # メール本文プレビュー（最初の200文字）
+            body_preview = task['body'].replace('\n', ' ').replace('\r', '')[:200].strip()
+            if not body_preview:
+                body_preview = '（本文なし）'
+
             html_content += f"""
             <div class="confirm-item">
               <div class="task-title">{html.escape(task['text'][:100])}</div>
               <div class="task-date">📅 締切: {due_str}</div>
+              <div style="color: #555; font-size: 13px; margin: 8px 0; padding: 8px; background-color: #fff5e6; border-radius: 3px;">
+                📝 {html.escape(body_preview)}
+              </div>
               <div class="task-sender">From: {html.escape(task['sender'][:60])}</div>
             </div>
             """
@@ -208,10 +222,18 @@ def create_todo_html(confirm_tasks, remind_tasks):
         html_content += '<h2 class="remind-header">📌 【リマインド】その他のお知らせ</h2>'
         for task in remind_tasks:
             received_str = task['received_date'].strftime('%Y年%m月%d日')
+            # メール本文プレビュー（最初の200文字）
+            body_preview = task['body'].replace('\n', ' ').replace('\r', '')[:200].strip()
+            if not body_preview:
+                body_preview = '（本文なし）'
+
             html_content += f"""
             <div class="remind-item">
               <div class="task-title">{html.escape(task['text'][:100])}</div>
               <div class="task-date">📧 受信日: {received_str}</div>
+              <div style="color: #555; font-size: 13px; margin: 8px 0; padding: 8px; background-color: #f0f8ff; border-radius: 3px;">
+                📝 {html.escape(body_preview)}
+              </div>
               <div class="task-sender">From: {html.escape(task['sender'][:60])}</div>
             </div>
             """
@@ -254,9 +276,18 @@ if __name__ == '__main__':
     creds = authenticate()
     service = build('gmail', 'v1', credentials=creds)
 
-    # メール検索
-    query = 'saiyou_post@mastertrust.co.jp -from:e741022@wakayama-u.ac.jp -from:iwasa.shuhei.1117@gmail.com'
-    emails_data = search_emails(service, query, max_results=50)
+    # 設定ファイルから読み込む
+    company_name = CONFIG['company_name']
+    search_email = CONFIG['search']['email']
+    exclude_emails = CONFIG['search']['exclude_emails']
+    max_results = CONFIG['search']['max_results']
+    recipients = CONFIG['email']['recipients']
+
+    # 検索クエリを生成
+    exclude_query = ' '.join([f'-from:{e}' for e in exclude_emails])
+    query = f'{search_email} {exclude_query}'
+
+    emails_data = search_emails(service, query, max_results=max_results)
 
     if not emails_data:
         print("関連メールが見つかりません")
@@ -282,15 +313,12 @@ if __name__ == '__main__':
     # HTMLリストを作成
     todo_html = create_todo_html(confirm_tasks, remind_tasks)
 
-    # メール送信先
-    recipients = [
-        'e741022@wakayama-u.ac.jp',
-        'iwasa.shuhei.1117@gmail.com'
-    ]
-
     # メール送信
     today = datetime.now().strftime('%Y/%m/%d')
-    subject = f"【ToDoリスト】日本マスタートラスト信託銀行 対応事項まとめ（{today}更新）"
+    subject = CONFIG['email']['subject_template'].format(
+        company_name=company_name,
+        date=today
+    )
 
     for recipient in recipients:
         send_email(recipient, subject, todo_html)

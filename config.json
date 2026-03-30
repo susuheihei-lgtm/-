@@ -1,0 +1,23 @@
+{
+  "company_name": "日本マスタートラスト信託銀行",
+  "search": {
+    "email": "saiyou_post@mastertrust.co.jp",
+    "exclude_emails": [
+      "e741022@wakayama-u.ac.jp",
+      "iwasa.shuhei.1117@gmail.com"
+    ],
+    "max_results": 50,
+    "months_range": 6
+  },
+  "email": {
+    "recipients": [
+      "e741022@wakayama-u.ac.jp",
+      "iwasa.shuhei.1117@gmail.com"
+    ],
+    "subject_template": "【ToDoリスト】{company_name} 対応事項まとめ（{date}更新）"
+  },
+  "schedule": {
+    "time": "07:30",
+    "timezone": "Asia/Tokyo"
+  }
+}
