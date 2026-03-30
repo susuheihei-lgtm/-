@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -28,11 +28,17 @@ jobs:
         run: |
           echo '${{ secrets.GMAIL_CREDENTIALS }}' > credentials.json
 
+      - name: Restore token.pickle from secret
+        run: |
+          echo '${{ secrets.GMAIL_TOKEN_PICKLE }}' > token_b64.txt
+          base64 -d token_b64.txt > token.pickle
+          rm token_b64.txt
+
       - name: Run auto-send-todo script
         run: python auto_send_todo_list.py
 
       - name: Upload token
-        if: always()
+        if: hashFiles('token.pickle') != ''
         uses: actions/upload-artifact@v4
         with:
           name: token-pickle
